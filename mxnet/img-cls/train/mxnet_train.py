@@ -17,6 +17,7 @@ from logging import config
 import docopt
 import mxnet as mx
 from importlib import import_module
+from operator_py import svm_metric 
 
 # init global logger
 log_format = '%(asctime)s %(levelname)s: %(message)s'
@@ -31,11 +32,16 @@ fhandler = None     # log to file
 def _init_():
     '''
     Training script for image-classification task on mxnet
-    Update: 2017/12/27
+    Update: 2018/02/28
     Author: @Northrend
     Contributor:
 
     Changelog:
+    2018/02/28  v3.1        support svm classifier 
+    2018/02/11  v3.0        support customized finetune layer name
+    2018/02/10  v2.9        support resize dev data separately
+    2018/02/03  v2.8        support random resize scale
+    2018/01/29  v2.7        fix resume training job bugs
     2017/12/27  v2.6        support se-inception-v4
     2017/12/04  v2.5        support change shorter edge size
     2017/11/21  v2.4        support input nomalization
@@ -58,10 +64,12 @@ def _init_():
                             [--log-lv=str --log-mode=str --data-train=str --data-dev=str]
                             [--model-prefix=str --num-epochs=int --threshold=flt --gpus=lst]
                             [--kv-store=str --network=str --num-layers=int --pretrained-model=str]
-                            [--load-epoch=int --num-classes=int  --num-samples=int --img-width=int --resize=int]
+                            [--load-epoch=int --num-classes=int  --num-samples=int --img-width=int]
+                            [--resize=lst --resize-scale=lst --data-type=str --finetune-layer=str]
                             [--batch-size=int --optimizer=str --lr=flt --lr-factor=flt --momentum=flt]
                             [--weight-decay=flt --lr-step-epochs=lst --disp-batches=int --disp-lr]
-                            [--top-k=int --metrics=lst --dropout=flt --num-groups=int --mean=lst --std=lst]
+                            [--top-k=int --metrics=lst --dropout=flt --num-groups=int --use-svm]
+                            [--mean=lst --std=lst]
         mxnet_train.py      -v | --version
         mxnet_train.py      -h | --help
 
@@ -93,7 +101,10 @@ def _init_():
         --num-samples=int           number of samples in training data [default: 15304]
         --num-groups=int            value of cardinality for resnext [default: 32]
         --img-width=int             input image size, keep width=height [default: 224]
-        --resize=int                set resize to change shorter edge size if needed [default: -1]
+        --resize=lst                set to resize shorter edge of train and dev data if needed [default: -1,-1]
+        --resize-scale=lst          set to randomly resize shorter edge in this scale range [default: 1,1]
+        --data-type=str             set to change input data type 
+        --finetune-layer=str        set customized finetune layer name
         --batch-size=int            the batch size on each gpu [default: 128]
         --dropout=flt               set dropout probability if needed [default: 0]
         --optimizer=str             optimizer type [default: sgd]
@@ -108,6 +119,7 @@ def _init_():
         --mean=lst                  list of rgb mean value [default: 123.68,116.779,103.939]
         --std=lst                   list of rgb std value [default: 58.395,57.12,57.375]
         --metrics=lst               metric of logging, set list of metrics to log several metrics [default: accuracy]
+        --use-svm                   whether to use svm as classifier in finetune model
     '''
     # config logger
     # logging.basicConfig(filename=args['<log>'],level=eval('logging.{}'.format(args['--log-lv'])), format=log_format)
@@ -175,21 +187,27 @@ def _save_model(model_prefix, rank=0):
         model_prefix, rank))
 
 
-def _get_iterators(data_train, data_dev, batch_size, data_shape=(3, 224, 224)):
+def _get_iterators(data_train, data_dev, batch_size, data_shape=(3, 224, 224), resize=[-1, -1], dtype=None):
     '''
     define the function which returns the data iterators
     '''
-    [mean_r, mean_g, mean_b] = [float(item) for item in args['--mean'].split(',')]
-    [std_r, std_g, std_b] = [float(item) for item in args['--std'].split(',')]
+    [mean_r, mean_g, mean_b] = [float(x) for x in args['--mean'].split(',')]
+    [std_r, std_g, std_b] = [float(x) for x in args['--std'].split(',')]
+    [max_random_scale, min_random_scale] = [float(x) for x in args['--resize-scale'].split(',')]
     logger.info('Input normalization params: mean_rgb {}, std_rgb {}'.format([mean_r, mean_g, mean_b],[std_r, std_g, std_b]))
+    [resize_train, resize_dev] = resize
+    label_name = 'softmax_label' if not args['--use-svm'] else 'svm_label'
     train = mx.io.ImageRecordIter(
+        dtype=dtype,
         path_imgrec=data_train,
 	# preprocess_threads=32,
         data_name='data',
-        label_name='softmax_label',
+        label_name=label_name,
         batch_size=batch_size,
         data_shape=data_shape,
-        resize=int(args['--resize']),
+        resize=resize_train,
+        max_random_scale=max_random_scale,
+        min_random_scale=min_random_scale,
         shuffle=True,
         rand_crop=True,
         rand_mirror=True,
@@ -201,13 +219,14 @@ def _get_iterators(data_train, data_dev, batch_size, data_shape=(3, 224, 224)):
         std_b=std_b
         )
     val = mx.io.ImageRecordIter(
+        dtype=dtype,
         path_imgrec=data_dev,
 	# preprocess_threads=32,
         data_name='data',
-        label_name='softmax_label',
+        label_name=label_name,
         batch_size=batch_size,
         data_shape=data_shape,
-        resize=int(args['--resize']),
+        resize=resize_dev,
         shuffle=False,
         rand_crop=False,
         rand_mirror=False,
@@ -227,7 +246,7 @@ def _get_eval_metrics(lst_metrics):
     return multiple evaluation metrics
     '''
     all_metrics = ['accuracy', 'ce', 'f1',
-                   'mae', 'mse', 'rmse', 'top_k_accuracy']
+                   'mae', 'mse', 'rmse', 'top_k_accuracy', 'hinge_loss']
     lst_child_metrics = []
     eval_metrics = mx.metric.CompositeEvalMetric()
     for metric in lst_metrics:
@@ -248,6 +267,8 @@ def _get_eval_metrics(lst_metrics):
         elif metric == 'top_k_accuracy':
             lst_child_metrics.append(
                 mx.metric.TopKAccuracy(top_k=int(args['--top-k'])))
+        elif metric == 'hinge_loss':
+            lst_child_metrics.append(svm_metric.HingeLoss())
     for child_metric in lst_child_metrics:
         eval_metrics.add(child_metric)
     return eval_metrics
@@ -288,7 +309,7 @@ def _get_batch_end_callback(batch_size, display_batch=40):
     return cbs
 
 
-def _get_fine_tune_model(symbol, arg_params, num_classes, layer_name='flatten0'):
+def _get_fine_tune_model(symbol, arg_params, num_classes, layer_name='flatten0', use_svm=False):
     '''
     define the function which replaces the the last fully-connected layer for a given network
     symbol: the pre-trained network symbol
@@ -300,7 +321,10 @@ def _get_fine_tune_model(symbol, arg_params, num_classes, layer_name='flatten0')
     net = all_layers[layer_name + '_output']
     net = mx.symbol.FullyConnected(
         data=net, num_hidden=num_classes, name='fc-' + str(num_classes))
-    net = mx.symbol.SoftmaxOutput(data=net, name='softmax')
+    if use_svm:
+        net = mx.symbol.SVMOutput(data=net, name='svm')
+    else:
+        net = mx.symbol.SoftmaxOutput(data=net, name='softmax')
     new_args = dict({k: arg_params[k] for k in arg_params if 'fc1' not in k})
     if args['--save-json']:
         net.save('./finetuned-symbol.json')
@@ -334,8 +358,10 @@ def _whatever_the_fucking_fit_is(symbol, arg_params, aux_params, train, val, bat
         'momentum': float(args['--momentum']),
         'wd': float(args['--weight-decay']),
         'lr_scheduler': lr_scheduler}
-
-    mod = mx.mod.Module(symbol=symbol, context=devices)
+    
+     
+    label_names = ['softmax_label'] if not args['--use-svm'] else ['svm_label']
+    mod = mx.mod.Module(symbol=symbol, context=devices, label_names=label_names)
     mod.bind(data_shapes=train.provide_data, label_shapes=train.provide_label)
     # initialize weights
     if args['--network'] == 'alexnet':
@@ -344,9 +370,11 @@ def _whatever_the_fucking_fit_is(symbol, arg_params, aux_params, train, val, bat
         mod.init_params(initializer=mx.init.Xavier(
             rnd_type='gaussian', factor_type="in", magnitude=2))
     if args['--finetune']:
-        # replace all parameters except for the last fully-connected layer with
-        # pre-trained model
-        mod.set_params(arg_params, aux_params, allow_missing=True)
+        # replace all parameters except for the last fully-connected layer with pre-trained model
+        mod.set_params(arg_params, aux_params, allow_missing=True, allow_extra=True)
+    elif args['--resume']:
+        # set weights 
+        mod.set_params(arg_params, aux_params, allow_missing=False, allow_extra=False)
 
     # set metrics during training
     # if len(args['--metrics'].split(',')) == 1:
@@ -362,6 +390,7 @@ def _whatever_the_fucking_fit_is(symbol, arg_params, aux_params, train, val, bat
 
     mod.fit(train, val,
             eval_metric=metrics,
+            begin_epoch=int(args['--load-epoch']) if args['--resume'] else 0,
             num_epoch=int(args['--num-epochs']),
             kvstore=kv,
             optimizer=args['--optimizer'],
@@ -378,11 +407,13 @@ def main():
     # prepare arguments
     num_classes = int(args['--num-classes'])
     batch_per_gpu = int(args['--batch-size'])
+    resize = [int(x) for x in args['--resize'].split(',')]
     num_gpus = len(args['--gpus'].split(',')
                    ) if args['--gpus'] is not None else 1
     batch_size = batch_per_gpu * num_gpus
+    data_type = args['--data-type'] if args['--data-type'] else None
     (train, val) = _get_iterators(args['--data-train'], args['--data-dev'],
-                                  batch_size, data_shape=(3, int(args['--img-width']), int(args['--img-width'])))
+                                  batch_size, data_shape=(3, int(args['--img-width']), int(args['--img-width'])), resize=resize, dtype=data_type)
 
     # io testing mode
     if args['--test-io']:
@@ -398,14 +429,16 @@ def main():
 
     if args['--finetune']:
         # load pre-trained model
+        layer_name = args['--finetune-layer'] if args['--finetune-layer'] else 'flatten0'
+        use_svm = args['--use-svm']
         sym, arg_params, aux_params = mx.model.load_checkpoint(
             args['--pretrained-model'], int(args['--load-epoch']))
         logger.info('pre-trained model loaded successfully, start finetune job...')
         # adapt original network to finetune network
-        (new_sym, new_args) = _get_fine_tune_model(sym, arg_params, num_classes)
+        (new_sym, new_args) = _get_fine_tune_model(sym, arg_params, num_classes, layer_name=layer_name, use_svm=use_svm)
     elif args['--resume']:
         # load model
-        sym, arg_params, aux_params = mx.model.load_checkpoint(
+        new_sym, new_args, aux_params = mx.model.load_checkpoint(
             args['--pretrained-model'], int(args['--load-epoch']))
         logger.info('model loaded successfully, resume training job...')
     else:

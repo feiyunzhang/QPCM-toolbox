@@ -21,7 +21,7 @@ import time
 from AvaLib import _time_it
 
 
-PYCAFFE_ROOT = '/opt/caffe/python/'
+PYCAFFE_ROOT = 'lib/caffe/python/'
 sys.path.append(PYCAFFE_ROOT)
 import caffe
 import skimage.io
@@ -51,9 +51,9 @@ def _init_():
 
     Usage:
         caffe_image_classifier.py   <in-list> <out-log> [-t | --test]
-                                    (--arch=str --weights=str --mean=str --label=str)
+                                    (--arch=str --weights=str --label=str)
                                     [--model-root=str --batch-size=int --img-width=int]
-                                    [--data-prefix=str --interval=int]
+                                    [--data-prefix=str --interval=int --gpu=int]
         caffe_image_classifier.py   -v | --version
         caffe_image_classifier.py   -h | --help
 
@@ -68,13 +68,13 @@ def _init_():
         -t --test                   single image test mode
         --arch=str                  network architecture (.prototxt)
         --weights=str               model file (.caffemodel)
-        --mean=str                  mean file (.binaryproto)
         --label=str                 text file which maps label index to concrete word
         --model-root=str            path prefix of model & net-arch &... if needed
         --batch-size=int            number of samples per forward [default: 1]
         --img-width=int             image width of model input [default: 224]
         --data-prefix=str           prefix of image path, if needed
         --interval=int              interval seconds between each batch [default: 3]
+        --gpu=int                   gpu id [default: 0]
     '''
     print('=' * 80 + '\nArguments submitted:')
     for key in sorted(args.keys()):
@@ -111,18 +111,6 @@ def _read_list(image_list_file):
     return image_list
 
 
-def _make_mean(meanfile):
-    print('generating mean file...')
-    mean_blob = caffe_pb2.BlobProto()
-    mean_blob.ParseFromString(open(meanfile, 'rb').read())
-    mean_npy = blobproto_to_array(mean_blob)
-    mean_npy_shape = mean_npy.shape
-    mean_npy = mean_npy.reshape(
-        mean_npy_shape[1], mean_npy_shape[2], mean_npy_shape[3])
-    print "done."
-    return mean_npy
-
-
 def _index_to_classname(label_file):
     f_label = open(label_file, 'r')
     label_list = []
@@ -130,6 +118,13 @@ def _index_to_classname(label_file):
         label_list.append(buff.split()[1])
     return label_list
 
+def center_crop(img, crop_size): 
+    short_edge = min(img.shape[:2])
+    if short_edge < crop_size:
+        return
+    yy = int((img.shape[0] - crop_size) / 2)
+    xx = int((img.shape[1] - crop_size) / 2)
+    return img[yy: yy + crop_size, xx: xx + crop_size]
 
 def net_init():
     '''
@@ -140,10 +135,8 @@ def net_init():
         args['--arch'] if args['--model-root'] else args['--arch']
     inference_weights = args['--model-root'] + \
         args['--weights'] if args['--model-root'] else args['--weights']
-    mean_file = args['--model-root'] + \
-        args['--mean'] if args['--model-root'] else args['--mean']
-    label_file = args['--model-root'] + \
-        args['--label'] if args['--model-root'] else args['--label']
+    mean = np.array([103.94, 116.78, 123.68], dtype=np.float32)
+    label_file = args['--label']
     batch_size = int(args['--batch-size'])
     image_width = int(args['--img-width'])       # matches model input
 
@@ -151,13 +144,13 @@ def net_init():
     net = caffe.Net(str(inference_architecture),        # defines the structure of the model which contains the trained weights
                     str(inference_weights),
                     caffe.TEST)                         # use test mode (e.g., don't perform dropout)
-    meanf = _make_mean(mean_file)
-    meannpy = meanf.mean(1).mean(1)
+
     transformer = caffe.io.Transformer({'data': net.blobs['data'].data.shape})
     # move image channels to outermost dimension
     transformer.set_transpose('data', (2, 0, 1))
     # subtract the dataset-mean value in each channel
-    transformer.set_mean('data', meannpy)
+    transformer.set_mean('data', mean)
+    transformer.set_input_scale('data', 0.017)
     # rescale from [0, 1] to [0, 255]
     transformer.set_raw_scale('data', 255)
     # swap channels from RGB to BGR
@@ -166,7 +159,7 @@ def net_init():
                               3,         # 3-channel (BGR) images
                               image_width, image_width)  # image size is 224*224
     caffe.set_mode_gpu()
-
+    caffe.set_device(int(args['--gpu']))
     model = {}
     model['net'] = net
     model['transformer'] = transformer
@@ -186,13 +179,16 @@ def net_single_infer(model, lst_image_path):
     label_list = model['label_list']
     for index, image_path in enumerate(lst_image_path):
         try:
-            img = caffe.io.load_image(image_path)
+            #img = caffe.io.load_image(image_path)
+            img = cv2.resize(image_path, (256, 256))
+            img = center_crop(img, image_width)
             transformed_image = transformer.preprocess('data', img)
         except Exception, e:
-            print Exception, ":", e
+            #print Exception, ":", e
             ERROR_IMG.append(os.path.basename(image_path))
             continue
-        net.blobs['data'].data[index] = transformed_image
+        net.blobs['data'].data[index] = transformed_image   
+ 
     # print net.blobs['data'].data.shape
     # print transformed_image.shape
     # print type(net.blobs['data'].data)
@@ -201,7 +197,7 @@ def net_single_infer(model, lst_image_path):
     tic = time.time()
     output = net.forward()
     toc = time.time()
-    print "forward time: " + str(toc - tic) + "s"
+    #print "forward time: " + str(toc - tic) + "s"
     lst_result = list()
     for index, output_prob in enumerate(output['prob']):
         # current batch can not satisfit batch-size argument
@@ -280,7 +276,7 @@ def test():
     '''
     image_path = [str(args['<in-list>'])]
     model = net_init()
-    print net_single_infer(model, image_path)
+    #print net_single_infer(model, image_path)
 
 
 def test_code():
@@ -297,7 +293,7 @@ def test_code():
             for count in xrange(img_queue.qsize()):
                 lst_image.append(img_queue.get())
             print('batch loaded')
-            print net_single_infer(model, lst_image)
+            #print net_single_infer(model, lst_image)
             GLOBAL_LOCK.release()
             time.sleep(int(args['--interval']))
         elif GLOBAL_FLAG and img_queue.empty():
@@ -316,3 +312,4 @@ if __name__ == "__main__":
     else:
         main()
     print('...done')
+

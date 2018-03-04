@@ -1,0 +1,1 @@
+python mxnet_image_classifier.py test.lst 84.96-res152-11k-places365-t9-test.log -c --label labels.lst --model-prefix prefix-model/res152-11k-places365-t9 --model-epoch 52 --img-width 224 --data-prefix /workspace/data/data/BK/Terror-Classify-V0.3-180227-fixed/val/ --gpu 0
