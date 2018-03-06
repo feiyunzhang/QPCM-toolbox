@@ -1,0 +1,6 @@
+{"class": "guns", "index": 1,"flag":1}
+{"class": "knives", "index": 2,"flag":1}
+{"class": "tibetan flag","index":3,"flag":1}
+{"class": "islamic flag", "index": 4,"flag":1}
+{"class": "isis flag", "index": 5,"flag":1}
+{"class": "not terror", "index": 6,"flag":0}
