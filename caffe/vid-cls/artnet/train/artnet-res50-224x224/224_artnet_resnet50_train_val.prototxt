@@ -10,7 +10,7 @@ layer {
   top: "data"
   top: "label"
   video_data_param {
-    source: "train_rgb_final.txt"
+    source: "train_new_0318_255737.txt"
     batch_size: 8
     new_width: 340
     new_height: 256
@@ -27,9 +27,9 @@ layer {
     multi_scale: true
     max_distort: 1
     scale_ratios: [1, 0.875, 0.75, 0.66]
-    mean_value: [104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104]
-    mean_value: [117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117]
-    mean_value: [123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123]
+    mean_value: [104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104]
+    mean_value: [117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117]
+    mean_value: [123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123]
   }
   include: { phase: TRAIN }
 }
@@ -39,10 +39,10 @@ layer {
   top: "data"
   top: "label"
   video_data_param {
-    source: "val_rgb_final.txt"
+    source: "val_new_0318_4000.txt"
     batch_size: 1
     new_length: 32
-    new_width: 240
+    new_width: 340
     new_height: 256
     num_segments: 1
     modality: RGB
@@ -52,9 +52,9 @@ layer {
   transform_param {
     crop_size: 224
     mirror: false
-    mean_value: [104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104]
-    mean_value: [117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117]
-    mean_value: [123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123]
+    mean_value: [104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104]
+    mean_value: [117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117]
+    mean_value: [123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123]
   }
   include: { phase: TEST }
 }
@@ -191,46 +191,18 @@ layer {
   top: "redu1_bn"
   type: "ReLU"
 }
-############################################## pool-extra ##########################################
-layer {
-  name: "pooling1-extra"
-  bottom: "redu1_bn"
-  top: "pooling1-extra"
-  type: "Convolution"
-  convolution_param {
-    num_output: 64
-    pad: [1, 1, 1]
-    kernel_size: [3, 3, 3]
-    stride: [2, 2, 2]
-    weight_filler{
-       type: "constant"
-       value: 0
-    }
-    bias_term: false
-    group: 64
-  }
-  param { lr_mult: 0 decay_mult: 0 }
-}
-layer {
-  name: "pooling1-extra_bn"
-  bottom: "pooling1-extra"
-  top: "pooling1-extra_bn"
-  type: "BN"
-  param { lr_mult: 1 decay_mult: 0 } param { lr_mult: 1 decay_mult: 0 }
-  bn_param { slope_filler { type: "constant" value: 1 } bias_filler { type: "constant" value: 0 } } 
-}
 
 ############################################## res2a ##########################################
 layer {
   name: "res2a_1"
-  bottom: "pooling1-extra_bn"
+  bottom: "redu1_bn"
   top: "res2a_1"
   type: "Convolution"
   convolution_param {
     num_output: 64
     pad: [1, 1, 1]
     kernel_size: [3, 3, 3]
-    stride: [1, 1, 1]
+    stride: [2, 2, 2]
     weight_filler{
        type: "xavier"
     }
@@ -367,8 +339,28 @@ layer {
   param { lr_mult: 1 decay_mult: 1 }
 }
 layer {
+  name: "res2a_down"
+  type: "Convolution"
+  bottom: "redu1"
+  top: "res2a_down"
+  convolution_param {
+    num_output: 64
+    pad: [1, 1, 1]
+    kernel_size: [3, 3, 3]
+    stride: [2, 2, 2]
+    weight_filler{
+       type: "xavier"
+    }
+    bias_filler{
+       type: "constant"
+       value: 0
+    }
+  }
+  param { lr_mult: 1 decay_mult: 1 } param { lr_mult: 2 decay_mult: 0 }
+}
+layer {
   name: "res2a"
-  bottom: "pooling1-extra"
+  bottom: "res2a_down"
   bottom: "redu2"
   top: "res2a"
   type: "Eltwise"
@@ -1965,85 +1957,6 @@ layer {
   top: "res4b_bn"
   bottom: "res4b_bn"
   type: "ReLU"
-}
-########################fuszhu classify########################
-######################################### Global pool ############################################################
-layer {
-  name: "global_pool_pre"
-  bottom: "res4b_bn"
-  top: "global_pool_pre"
-  type: "Pooling"
-  pooling_param {
-    pool: AVE
-    kernel_size: [1, 14, 14]
-    stride: [1, 1, 1]
-  }
-}
-layer {
-  name: "global_pool_reshape_pre"
-  type: "Reshape"
-  bottom: "global_pool_pre"
-  top: "global_pool_reshape_pre"
-  reshape_param { shape { dim: -1 dim: 512 } }
-}
-layer {
-  name: "dropout_pre"
-  type: "Dropout"
-  bottom: "global_pool_reshape_pre"
-  top: "global_pool_reshape_pre"
-  dropout_param { dropout_ratio: 0.1 }
-}
-########################################## FC #######################################
-layer {
-  name: "fc8_pre"
-  type: "InnerProduct"
-  bottom: "global_pool_reshape_pre"
-  top: "fc8_pre"
-  param {
-    lr_mult: 1
-    decay_mult: 1
-  }
-  param {
-    lr_mult: 2
-    decay_mult: 0
-  }
-  inner_product_param {
-    num_output: 400
-    weight_filler {
-      type: "xavier"
-    }
-    bias_filler {
-      type: "constant"
-      value: 0
-    }
-  }
-}
-layer {
-  bottom: "fc8_pre"
-  bottom: "label"
-  top: "loss_pre"
-  name: "loss_pre"
-  type: "SoftmaxWithLoss"
-  loss_weight: 0.3
-}
-layer {
-  bottom: "fc8_pre"
-  top: "loss_pre_prob"
-  name: "loss_pre_prob"
-  type: "Softmax"
-  include {
-    phase: TEST
-  }
-}
-layer {
-  bottom: "loss_pre_prob"
-  bottom: "label"
-  top: "loss_pre/top-1"
-  name: "loss_pre/top-1"
-  type: "Accuracy"
-  include {
-    phase: TEST
-  }
 }
 
 ################################################ Res4c ###########################################################
