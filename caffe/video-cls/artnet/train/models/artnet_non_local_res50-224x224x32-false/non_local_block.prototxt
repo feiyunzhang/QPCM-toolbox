@@ -1,0 +1,186 @@
+layer {
+  name: "caffe.NonLocal_S13_thet"
+  type: "Convolution"
+  bottom: "res4e_2_t_bn"
+  top: "caffe.NonLocal_S13_thet"
+  param { lr_mult: 1 decay_mult: 1 } param { lr_mult: 2 decay_mult: 0 }
+  convolution_param {
+    num_output: 128
+    pad: [0, 0, 0]
+    kernel_size: [1, 1, 1]
+    stride: [1, 1, 1]
+    weight_filler{
+       type: "xavier"
+    }
+    bias_filler{
+       type: "constant"
+       value: 0
+    }
+  }
+}
+layer {
+  name: "caffe.NonLocal_S13_phi"
+  type: "Convolution"
+  bottom: "res4e_2_t_bn"
+  top: "caffe.NonLocal_S13_phi"
+  param { lr_mult: 1 decay_mult: 1 } param { lr_mult: 2 decay_mult: 0 }
+  convolution_param {
+    num_output: 128
+    pad: [0, 0, 0]
+    kernel_size: [1, 1, 1]
+    stride: [1, 1, 1]
+    weight_filler{
+       type: "xavier"
+    }
+    bias_filler{
+       type: "constant"
+       value: 0
+    }
+  }
+}
+layer {
+    name: "caffe.NonLocal_S13_phi_reshape"
+    type: "Reshape"
+    bottom: "caffe.NonLocal_S13_phi"
+    top: "caffe.NonLocal_S13_phi_reshape"
+    reshape_param {
+      shape {
+        dim: 1
+        dim: 1
+        dim: -1
+        dim: 128
+    }
+  }
+}
+layer {
+    name: "caffe.NonLocal_S13_thet_reshape"
+    type: "Reshape"
+    bottom: "caffe.NonLocal_S13_thet"
+    top: "caffe.NonLocal_S13_thet_reshape"
+    reshape_param {
+      shape {
+        dim: 1
+        dim: 1
+        dim: -1
+        dim: 128
+    }
+  }
+}
+layer {
+  name: "caffe.Eltwise_NonLocal_S13"
+  type: "MatMul2"
+  bottom: "caffe.NonLocal_S13_phi_reshape"
+  bottom: "caffe.NonLocal_S13_thet_reshape"
+  top: "caffe.Eltwise_NonLocal_S13"
+}
+layer {
+  name: "caffe.NonLocal_S13_g"
+  type: "Convolution"
+  bottom: "res4e_2_t_bn"
+  top: "caffe.NonLocal_S13_g"
+  param { lr_mult: 1 decay_mult: 1 } param { lr_mult: 2 decay_mult: 0 }
+  convolution_param {
+    num_output: 128
+    pad: [0, 0, 0]
+    kernel_size: [1, 1, 1]
+    stride: [1, 1, 1]
+    weight_filler{
+       type: "xavier"
+    }
+    bias_filler{
+       type: "constant"
+       value: 0
+    }
+  }
+}
+layer {
+    name: "caffe.NonLocal_S13_g_reshape"
+    type: "Reshape"
+    bottom: "caffe.NonLocal_S13_g"
+    top: "caffe.NonLocal_S13_g_reshape"
+    reshape_param {
+      shape {
+        dim: 1
+        dim: 1
+        dim: 128
+        dim: -1
+    }
+  }
+}
+layer {
+  name: "caffe.NonLocal_S13_softmax"
+  type: "Softmax"
+  bottom: "caffe.Eltwise_NonLocal_S13"
+  top: "caffe.NonLocal_S13_softmax"
+}
+layer {
+  name: "caffe.EltwisePast_NonLocal_S13"
+  type: "MatMul2"
+  bottom: "caffe.NonLocal_S13_softmax"
+  bottom: "caffe.NonLocal_S13_g_reshape"
+  top: "caffe.EltwisePast_NonLocal_S13"
+}
+layer {
+    name: "caffe.EltwisePast_NonLocal_S13_reshape"
+    type: "Reshape"
+    bottom: "caffe.EltwisePast_NonLocal_S13"
+    top: "caffe.EltwisePast_NonLocal_S13_reshape"
+    reshape_param {
+      shape {
+        dim: -1
+        dim: 128
+        dim: 2
+        dim: 14
+        dim: 14
+    }
+  }
+}
+layer {
+  name: "caffe.NonLocal_S13_final"
+  type: "Convolution"
+  bottom: "caffe.EltwisePast_NonLocal_S13_reshape"
+  top: "caffe.NonLocal_S13_final"
+  param { lr_mult: 1 decay_mult: 1 } param { lr_mult: 2 decay_mult: 0 }
+  convolution_param {
+    num_output: 256
+    pad: [0, 0, 0]
+    kernel_size: [1, 1, 1]
+    stride: [1, 1, 1]
+    weight_filler{
+       type: "xavier"
+    }
+    bias_filler{
+       type: "constant"
+       value: 0
+    }
+  }
+}
+layer {
+  name: "caffe.NonLocal_S13_BN"
+  type: "BN"
+  bottom: "caffe.NonLocal_S13_final"
+  top: "caffe.NonLocal_S13_BN"
+  param {
+    lr_mult: 1
+    decay_mult: 0
+  }
+  param {
+    lr_mult: 1
+    decay_mult: 0
+  }
+  bn_param {
+    slope_filler {
+      value: 1
+    }
+    bias_filler {
+      value: 0
+    }
+  }
+}
+layer {
+  name: "caffe.NonLocal_S13"
+  type: "Eltwise"
+  bottom: "caffe.NonLocal_S13_BN"
+  bottom: "res4e_2_t_bn"
+  top: "caffe.NonLocal_S13"
+}

@@ -1,0 +1,32 @@
+net: "models/kinetics400/artnet_non_local_res50_train_val.prototxt"
+
+# testing parameter
+test_iter:500
+test_interval: 5000
+test_initialization: true
+
+# output
+display: 20
+average_loss: 20
+snapshot: 5000
+snapshot_prefix: "models/snapshot/artnet_non_local_res50_pretrain_imagenet_p1"
+debug_info: false
+
+# learning rate
+base_lr: 0.1
+lr_policy: "multistep"
+gamma: 0.1
+stepvalue: [150000, 300000, 400000]
+max_iter: 500000
+iter_size: 2
+
+# parameter of SGD
+momentum: 0.9
+weight_decay: 0.0005
+clip_gradients: 60
+
+# GPU setting
+solver_mode: GPU
+device_id: [4,5,6,7]
+richness: 200
+
