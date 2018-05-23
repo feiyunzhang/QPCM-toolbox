@@ -53,10 +53,15 @@ class TSNDataSet(data.Dataset):
                 print("Couldn't load image:{}".format(img_path))
                 return None
         elif self.modality == 'Flow':
-            x_img = Image.open(os.path.join(directory, self.image_tmpl.format('x', idx))).convert('L')
-            y_img = Image.open(os.path.join(directory, self.image_tmpl.format('y', idx))).convert('L')
-
-            return [x_img, y_img]
+            x_img_path = os.path.join(directory, self.image_tmpl.format('x', idx))
+            y_img_path = os.path.join(directory, self.image_tmpl.format('y', idx))
+            try:
+                x_img = Image.open(x_img_path).convert('L')
+                y_img = Image.open(y_img_path).convert('L')
+                return [x_img, y_img]
+            except:
+                print("Couldn't load flow image:{} or {}".format(x_img_path, y_img_path))
+                return None
 
     def _parse_list(self):
         self.video_list = [VideoRecord(x.strip().split(' ')) for x in open(self.list_file)]
@@ -69,7 +74,7 @@ class TSNDataSet(data.Dataset):
         average_duration = (record.num_frames - self.new_length + 1) // self.num_segments
         if average_duration > 0:
             offsets = np.multiply(list(range(self.num_segments)), average_duration) + randint(average_duration, size=self.num_segments)
-        elif record.num_frames > self.num_segments:
+        elif record.num_frames > self.num_segments and record.num_frames >= self.new_length:
             offsets = np.sort(randint(record.num_frames - self.new_length + 1, size=self.num_segments))
         else:
             offsets = np.zeros((self.num_segments,))
@@ -96,14 +101,17 @@ class TSNDataSet(data.Dataset):
 
         if not self.test_mode:
             segment_indices = self._sample_indices(record) if self.random_shift else self._get_val_indices(record)
+            process_data, label = self.get(record, segment_indices)
+            while process_data is None:
+                index = randint(0, len(self.video_list) - 1)
+                process_data, label = self.__getitem__(index)
+            return process_data, label
         else:
             segment_indices = self._get_test_indices(record)
-
-        process_data,label = self.get(record, segment_indices)
-        while process_data is None:
-            index = randint(0,len(self.video_list)-1)
-            process_data,label = self.__getitem__(index)
-        return process_data,label
+            process_data,label = self.get(record, segment_indices)
+            if process_data is None:
+                raise ValueError('sample indices:',record.path, segment_indices)
+            return process_data,label
 
     def get(self, record, indices):
 

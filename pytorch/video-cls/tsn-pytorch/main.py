@@ -27,19 +27,23 @@ def main():
         num_class = 51
     elif args.dataset == 'kinetics':
         num_class = 400
+    elif args.dataset == 'ucf-crime':
+        num_class = 14
+    elif args.dataset == 'mit':
+        num_class = 339
     else:
         raise ValueError('Unknown dataset '+args.dataset)
 
     model = TSN(num_class, args.num_segments, args.modality,
                 base_model=args.arch,
-                consensus_type=args.consensus_type, dropout=args.dropout, partial_bn=not args.no_partialbn)
+                consensus_type=args.consensus_type, dropout=args.dropout, partial_bn=args.use_partialbn, use_GN=args.use_gn)
 
     crop_size = model.crop_size
     scale_size = model.scale_size
     input_mean = model.input_mean
     input_std = model.input_std
     policies = model.get_optim_policies()
-    train_augmentation = model.get_augmentation()
+    train_augmentation = model.get_augmentation(vgg_style=False)
 
     model = torch.nn.DataParallel(model, device_ids=args.gpus).cuda()
 
@@ -47,11 +51,19 @@ def main():
         if os.path.isfile(args.resume):
             print(("=> loading checkpoint '{}'".format(args.resume)))
             checkpoint = torch.load(args.resume)
-            args.start_epoch = checkpoint['epoch']
-            best_prec1 = checkpoint['best_prec1']
-            model.load_state_dict(checkpoint['state_dict'])
+            if args.kinetics_pretrained:
+                pretrained_state = checkpoint['state_dict']
+                del pretrained_state['module.new_fc.weight']
+                del pretrained_state['module.new_fc.bias']
+                model_state = model.state_dict()
+                model_state.update(pretrained_state)
+                model.load_state_dict(model_state)
+            else:
+                args.start_epoch = checkpoint['epoch']
+                best_prec1 = checkpoint['best_prec1']
+                model.load_state_dict(checkpoint['state_dict'])
             print(("=> loaded checkpoint '{}' (epoch {})"
-                  .format(args.evaluate, checkpoint['epoch'])))
+                .format(args.resume, checkpoint['epoch'])))
         else:
             print(("=> no checkpoint found at '{}'".format(args.resume)))
 
@@ -145,10 +157,10 @@ def train(train_loader, model, criterion, optimizer, epoch):
     top1 = AverageMeter()
     top5 = AverageMeter()
 
-    if args.no_partialbn:
-        model.module.partialBN(False)
-    else:
+    if args.use_partialbn:
         model.module.partialBN(True)
+    else:
+        model.module.partialBN(False)
 
     # switch to train mode
     model.train()

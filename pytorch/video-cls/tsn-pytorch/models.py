@@ -1,15 +1,16 @@
+import torch
 from torch import nn
-
 from ops.basic_ops import ConsensusModule, Identity
 from transforms import *
 from torch.nn.init import normal, constant
+from my_model.group_norm import GroupNorm2d
 
 class TSN(nn.Module):
     def __init__(self, num_class, num_segments, modality,
                  base_model='resnet101', new_length=None,
                  consensus_type='avg', before_softmax=True,
                  dropout=0.8,
-                 crop_num=1, partial_bn=True):
+                 crop_num=1, partial_bn=False, use_GN=False):
         super(TSN, self).__init__()
         self.modality = modality
         self.num_segments = num_segments
@@ -18,6 +19,8 @@ class TSN(nn.Module):
         self.dropout = dropout
         self.crop_num = crop_num
         self.consensus_type = consensus_type
+        self._enable_pbn = partial_bn
+        self._enable_gn = use_GN
         if not before_softmax and consensus_type != 'avg':
             raise ValueError("Only avg consensus can be used after Softmax")
 
@@ -34,7 +37,10 @@ TSN Configurations:
     new_length:         {}
     consensus_module:   {}
     dropout_ratio:      {}
-        """.format(base_model, self.modality, self.num_segments, self.new_length, consensus_type, self.dropout)))
+    use_partial_bn:     {}
+    use_group_norm:     {}
+        """.format(base_model, self.modality, self.num_segments, self.new_length, consensus_type, self.dropout,
+                   self._enable_pbn, self._enable_gn)))
 
         self._prepare_base_model(base_model)
 
@@ -42,6 +48,8 @@ TSN Configurations:
 
         if self.modality == 'Flow':
             print("Converting the ImageNet model to a flow init model")
+            self.base_model = self._init_with_rgb_model(self.base_model)
+
             self.base_model = self._construct_flow_model(self.base_model)
             print("Done. Flow model ready...")
         elif self.modality == 'RGBDiff':
@@ -54,9 +62,20 @@ TSN Configurations:
         if not self.before_softmax:
             self.softmax = nn.Softmax()
 
-        self._enable_pbn = partial_bn
-        if partial_bn:
-            self.partialBN(True)
+    def _init_with_rgb_model(self, base_model):
+        rgb_base_model = ''
+        checkpoint = torch.load(rgb_base_model)
+        pretrained_state = checkpoint['state_dict']
+        del pretrained_state['module.new_fc.weight']
+        del pretrained_state['module.new_fc.bias']
+        new_pretrained_state = dict()
+        for k,v in pretrained_state.items():
+            new_k = k.replace('module.base_model.','')
+            new_pretrained_state[new_k] = v
+        model_state = base_model.state_dict()
+        model_state.update(new_pretrained_state)
+        base_model.load_state_dict(model_state)
+        return base_model
 
     def _prepare_tsn(self, num_class):
         if self.base_model.__class__.__name__ == 'DPN':
@@ -77,7 +96,9 @@ TSN Configurations:
         else:
             normal(self.new_fc.weight, 0, std)
             constant(self.new_fc.bias, 0)
+
         return feature_dim
+
 
     def _prepare_base_model(self, base_model):
         if 'vgg' in base_model:
@@ -89,7 +110,6 @@ TSN Configurations:
             pretrained_dict = {k:v for k,v in pretrained_dict.items() if k in model_dict}
             model_dict.update(pretrained_dict)
             self.base_model.load_state_dict(model_dict)
-            print self.base_model.state_dict()
             self.base_model.last_layer_name = 'fc'
             self.input_size = 224
             self.input_mean = [0.485, 0.456, 0.406]
@@ -114,7 +134,13 @@ TSN Configurations:
             elif self.modality == 'RGBDiff':
                 self.input_mean = [0.485, 0.456, 0.406] + [0] * 3 * self.new_length
                 self.input_std = self.input_std + [np.mean(self.input_std) * 2] * 3 * self.new_length
-        elif 'inception' in base_model:
+        elif 'inceptionv3' in base_model:
+            self.base_model = getattr(torchvision.models, base_model)(True)
+            self.base_model.last_layer_name = 'fc'
+            self.input_size = 299
+            self.input_mean = [0.5]
+            self.input_std = [0.5]
+        elif 'inceptionv4' in base_model or 'inceptionresnetv2' in base_model:
             import pytorch_model_zoo
             self.base_model = getattr(pytorch_model_zoo, base_model)()
             self.base_model.last_layer_name = 'last_linear'
@@ -152,6 +178,25 @@ TSN Configurations:
         else:
             raise ValueError('Unknown base model: {}'.format(base_model))
 
+        if self._enable_gn:
+            self._replace_bn_with_gn(self.base_model)
+            print("enable GN:",self.base_model)
+
+
+    def _replace_bn_with_gn(self, model):
+        for layer_name, layer_type in model.named_children():
+            if isinstance(layer_type, nn.BatchNorm2d):
+                channel_num = layer_type.num_features
+                setattr(model, layer_name, GroupNorm2d(channel_num))
+            elif isinstance(layer_type, nn.Sequential):
+                for idx, block in enumerate(layer_type):
+                    if isinstance(block, nn.BatchNorm2d):
+                        channel_num = block.num_features
+                        layer_type.__setitem__(idx, GroupNorm2d(channel_num))  # this method is new in pytorch0.4.0
+                    else:
+                        self._replace_bn_with_gn(block)
+
+
     def train(self, mode=True):
         """
         Override the default train() to freeze the BN parameters
@@ -171,8 +216,10 @@ TSN Configurations:
                         m.weight.requires_grad = False
                         m.bias.requires_grad = False
 
+
     def partialBN(self, enable):
         self._enable_pbn = enable
+
 
     def get_optim_policies(self):
         first_conv_weight = []
@@ -180,6 +227,7 @@ TSN Configurations:
         normal_weight = []
         normal_bias = []
         bn = []
+        gn = []
 
         conv_cnt = 0
         bn_cnt = 0
@@ -200,7 +248,6 @@ TSN Configurations:
                 normal_weight.append(ps[0])
                 if len(ps) == 2:
                     normal_bias.append(ps[1])
-                  
             elif isinstance(m, torch.nn.BatchNorm1d):
                 bn.extend(list(m.parameters()))
             elif isinstance(m, torch.nn.BatchNorm2d):
@@ -208,22 +255,38 @@ TSN Configurations:
                 # later BN's are frozen
                 if not self._enable_pbn or bn_cnt == 1:
                     bn.extend(list(m.parameters()))
+            elif isinstance(m, GroupNorm2d):
+                gn.extend(list(m.parameters()))
             elif len(m._modules) == 0:
                 if len(list(m.parameters())) > 0:
                     raise ValueError("New atomic module type: {}. Need to give it a learning policy".format(type(m)))
+        if self._enable_gn:
+            return [
+                {'params': first_conv_weight, 'lr_mult': 5 if self.modality == 'Flow' else 1, 'decay_mult': 1,
+                 'name': "first_conv_weight"},
+                {'params': first_conv_bias, 'lr_mult': 10 if self.modality == 'Flow' else 2, 'decay_mult': 0,
+                 'name': "first_conv_bias"},
+                {'params': normal_weight, 'lr_mult': 1, 'decay_mult': 1,
+                 'name': "normal_weight"},
+                {'params': normal_bias, 'lr_mult': 2, 'decay_mult': 0,
+                 'name': "normal_bias"},
+                {'params': gn, 'lr_mult': 1, 'decay_mult': 0.2,
+                 'name': "GN scale/shift"},
+            ]
+        else:
+            return [
+                {'params': first_conv_weight, 'lr_mult': 5 if self.modality == 'Flow' else 1, 'decay_mult': 1,
+                 'name': "first_conv_weight"},
+                {'params': first_conv_bias, 'lr_mult': 10 if self.modality == 'Flow' else 2, 'decay_mult': 0,
+                 'name': "first_conv_bias"},
+                {'params': normal_weight, 'lr_mult': 1, 'decay_mult': 1,
+                 'name': "normal_weight"},
+                {'params': normal_bias, 'lr_mult': 2, 'decay_mult': 0,
+                 'name': "normal_bias"},
+                {'params': bn, 'lr_mult': 1, 'decay_mult': 0,
+                 'name': "BN scale/shift"},
+            ]
 
-        return [
-            {'params': first_conv_weight, 'lr_mult': 5 if self.modality == 'Flow' else 1, 'decay_mult': 1,
-             'name': "first_conv_weight"},
-            {'params': first_conv_bias, 'lr_mult': 10 if self.modality == 'Flow' else 2, 'decay_mult': 0,
-             'name': "first_conv_bias"},
-            {'params': normal_weight, 'lr_mult': 1, 'decay_mult': 1,
-             'name': "normal_weight"},
-            {'params': normal_bias, 'lr_mult': 2, 'decay_mult': 0,
-             'name': "normal_bias"},
-            {'params': bn, 'lr_mult': 1, 'decay_mult': 0,
-             'name': "BN scale/shift"},
-        ]
 
     def forward(self, input):
         sample_len = (3 if self.modality == "RGB" else 2) * self.new_length
@@ -330,15 +393,16 @@ TSN Configurations:
     def scale_size(self):
         return self.input_size * 256 // 224
 
-    def get_augmentation(self):
-        if self.modality == 'RGB':
-            #return torchvision.transforms.Compose([GroupMultiScaleCrop(self.input_size, [1, .875, .75, .66]),
-            #                                       GroupRandomHorizontalFlip(is_flow=False)])
+    def get_augmentation(self,vgg_style=False):
+        if self.modality == 'RGB' and vgg_style:
             resize_range_min = self.input_size * 256 // 224
             resize_range_max = self.input_size * 320 // 224
             return torchvision.transforms.Compose([GroupRandomResizeCrop([resize_range_min,resize_range_max], self.input_size),
                                                    GroupRandomHorizontalFlip(is_flow=False),
                                                    GroupColorJitter(brightness=0.05,contrast=0.05,saturation=0.05,hue=0.05)])
+        elif self.modality == 'RGB' and not vgg_style:
+            return torchvision.transforms.Compose([GroupMultiScaleCrop(self.input_size, [1, .875, .75, .66]),
+                                                   GroupRandomHorizontalFlip(is_flow=False)])
         elif self.modality == 'Flow':
             return torchvision.transforms.Compose([GroupMultiScaleCrop(self.input_size, [1, .875, .75]),
                                                    GroupRandomHorizontalFlip(is_flow=True)])

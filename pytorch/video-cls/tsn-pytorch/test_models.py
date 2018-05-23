@@ -14,7 +14,7 @@ from ops import ConsensusModule
 # options
 parser = argparse.ArgumentParser(
     description="Standard video-level testing")
-parser.add_argument('dataset', type=str, choices=['ucf101', 'hmdb51', 'kinetics'])
+parser.add_argument('dataset', type=str, choices=['ucf101', 'hmdb51', 'kinetics', 'ucf-crime'])
 parser.add_argument('modality', type=str, choices=['RGB', 'Flow', 'RGBDiff'])
 parser.add_argument('test_list', type=str)
 parser.add_argument('weights', type=str)
@@ -42,6 +42,8 @@ elif args.dataset == 'hmdb51':
     num_class = 51
 elif args.dataset == 'kinetics':
     num_class = 400
+elif args.dataset == 'ucf-crime':
+    num_class = 14
 else:
     raise ValueError('Unknown dataset '+args.dataset)
 
@@ -94,8 +96,9 @@ net.eval()
 data_gen = enumerate(data_loader)
 
 total_num = len(data_loader.dataset)
-output = []
 
+video_scores = []
+video_labels = []
 
 def eval_video(video_data):
     i, data, label = video_data
@@ -113,9 +116,8 @@ def eval_video(video_data):
     input_var = torch.autograd.Variable(data.view(-1, length, data.size(2), data.size(3)),
                                         volatile=True)
     rst = net(input_var).data.cpu().numpy().copy()
-    return i, rst.reshape((num_crop, args.test_segments, num_class)).mean(axis=0).reshape(
-        (args.test_segments, 1, num_class)
-    ), label[0]
+    scores = np.array(rst.mean(axis=0))
+    return i, scores, label[0]
 
 
 proc_start_time = time.time()
@@ -125,15 +127,14 @@ for i, (data, label) in data_gen:
     if i >= max_num:
         break
     rst = eval_video((i, data, label))
-    output.append(rst[1:])
+    video_scores.append(rst[1])
+    video_labels.append(rst[2])
     cnt_time = time.time() - proc_start_time
     print('video {} done, total {}/{}, average {} sec/video'.format(i, i+1,
                                                                     total_num,
                                                                     float(cnt_time) / (i+1)))
 
-video_pred = [np.argmax(np.mean(x[0], axis=0)) for x in output]
-
-video_labels = [x[1] for x in output]
+video_pred = [np.argmax(x) for x in video_scores]
 
 
 cf = confusion_matrix(video_labels, video_pred).astype(float)
@@ -149,19 +150,19 @@ print('Accuracy {:.02f}%'.format(np.mean(cls_acc) * 100))
 
 if args.save_scores is not None:
 
-    # reorder before saving
-    name_list = [x.strip().split()[0] for x in open(args.test_list)]
+    # # reorder before saving
+    # name_list = [x.strip().split()[0] for x in open(args.test_list)]
+    #
+    # order_dict = {e:i for i, e in enumerate(sorted(name_list))}
+    #
+    # reorder_output = [None] * len(output)
+    # reorder_label = [None] * len(output)
+    #
+    # for i in range(len(output)):
+    #     idx = order_dict[name_list[i]]
+    #     reorder_output[idx] = output[i]
+    #     reorder_label[idx] = video_labels[i]
 
-    order_dict = {e:i for i, e in enumerate(sorted(name_list))}
-
-    reorder_output = [None] * len(output)
-    reorder_label = [None] * len(output)
-
-    for i in range(len(output)):
-        idx = order_dict[name_list[i]]
-        reorder_output[idx] = output[i]
-        reorder_label[idx] = video_labels[i]
-
-    np.savez(args.save_scores, scores=reorder_output, labels=reorder_label)
+    np.savez(args.save_scores, scores=video_scores, labels=video_labels)
 
 

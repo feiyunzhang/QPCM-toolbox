@@ -88,9 +88,13 @@ pip install torchvision
 ```
 pip install -i https://pypi.tuna.tsinghua.edu.cn/simple scikit-learn
 ```
-
-to be continued ...
-
+```python
+python test_models.py kinetics RGB <kinetics_rgb_val_list> \
+                      <trained_model_weights_file> \
+                      --arch inceptionresnetv2 \
+                      --save_score inceptionresnetv2_score  \
+                      --gpus 0 -j 1
+```
 
 
 ### Reference
