@@ -46,11 +46,19 @@ def main():
         if os.path.isfile(args.resume):
             print(("=> loading checkpoint '{}'".format(args.resume)))
             checkpoint = torch.load(args.resume)
-            args.start_epoch = checkpoint['epoch']
-            best_prec1 = checkpoint['best_prec1']
-            i3d_model.load_state_dict(checkpoint['state_dict'])
+            if args.i3d_pretrained:
+                pretrained_state = checkpoint['state_dict']
+                del pretrained_state['module.new_fc.weight']
+                del pretrained_state['module.new_fc.bias']
+                model_state = i3d_model.state_dict()
+                model_state.update(pretrained_state)
+                i3d_model.load_state_dict(model_state)
+            else:
+                args.start_epoch = checkpoint['epoch']
+                best_prec1 = checkpoint['best_prec1']
+                i3d_model.load_state_dict(checkpoint['state_dict'])
             print(("=> loaded checkpoint '{}' (epoch {})"
-                  .format(args.evaluate, checkpoint['epoch'])))
+                .format(args.resume, checkpoint['epoch'])))
         else:
             print(("=> no checkpoint found at '{}'".format(args.resume)))
 

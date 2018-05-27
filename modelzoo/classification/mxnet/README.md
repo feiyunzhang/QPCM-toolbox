@@ -41,6 +41,8 @@ Project links:
  se-resnext101-32x4d | 19.83/4.95  | 12.15/4.08 | [187.3MB](https://pan.baidu.com/s/1dGcJPdR)(BaiduCloud)
  se-resnext152-32x4d | 18.86/4.47  | 17.39/3.85 | [440MB](https://pan.baidu.com/s/1kWJQXZD)(BaiduCloud)
  se-inception-v2     | 23.64/7.05  | 21.61/5.88 | [45.6MB](https://pan.baidu.com/s/1htqkSh2)(BaiduCloud)
+ mobilenet-v1        | 28.76/9.85  |     ..     | [16.6MB](http://ozgadcbei.bkt.clouddn.com/mobilenet-v1.params)(QiNiu)
+ mobilenet-v2        | 28.38/9.73  |     ..     | [13.8MB](http://ozgadcbei.bkt.clouddn.com/mobilenet-v2.params)(QiNiu)
 
 
  - The resnet18-priv, resnext26-32x4d-priv is trained under [pytorch](https://github.com/soeaver/pytorch-classification) by bupt-priv.
@@ -66,3 +68,7 @@ Project links:
 
     python evaluation_cls.py
 
+**4. MobileNet Notes**
+- RGB mean values **[123.68,116.78,103.94]** are subtracted
+- **scale: 0.017** is used as std values for image preprocessing
+- This model is converted from [MobileNet-Caffe](https://github.com/shicai/MobileNet-Caffe)

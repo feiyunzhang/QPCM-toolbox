@@ -6,8 +6,7 @@ import models
 
 class I3DModel(torch.nn.Module):
     def __init__(self, num_class, sample_frames, modality,
-                 base_model='resnet101',
-                 dropout=0.8):
+                 base_model='resnet101', dropout=0.8):
         super(I3DModel, self).__init__()
         self.modality = modality
         self.sample_frames = sample_frames
@@ -27,7 +26,11 @@ I3D Configurations:
 
 
     def _prepare_i3d(self, num_class):
-        feature_dim = getattr(self.base_model, self.base_model.last_layer_name).in_features
+        if self.base_model.__class__.__name__ == 'I3DDPN':
+            feature_dim = getattr(self.base_model, self.base_model.last_layer_name).in_channels
+        else:
+            feature_dim = getattr(self.base_model, self.base_model.last_layer_name).in_features
+
         if self.dropout == 0:
             setattr(self.base_model, self.base_model.last_layer_name, torch.nn.Linear(feature_dim, num_class))
             self.new_fc = None
@@ -43,13 +46,26 @@ I3D Configurations:
             normal(self.new_fc.weight, 0, std)
             constant(self.new_fc.bias, 0)
 
+
     def _prepare_base_model(self, base_model):
-        if 'resnet101' in base_model or 'resnet152' in base_model:
+        if 'nonlocal' in base_model and 'resnet' in base_model:
             self.base_model = getattr(models, base_model)(pretrained=True)
             self.base_model.last_layer_name = 'fc'
             self.input_size = 224
             self.input_mean = [0.485, 0.456, 0.406]
             self.input_std = [0.229, 0.224, 0.225]
+        elif 'i3d' in base_model and 'resnet' in base_model:
+            self.base_model = getattr(models, base_model)(pretrained=True)
+            self.base_model.last_layer_name = 'fc'
+            self.input_size = 224
+            self.input_mean = [0.485, 0.456, 0.406]
+            self.input_std = [0.229, 0.224, 0.225]
+        elif 'i3d' in base_model and 'dpn' in base_model:
+            self.base_model = getattr(models,base_model)()
+            self.base_model.last_layer_name = 'classifier'
+            self.input_size = 224
+            self.input_mean = [124 / 255, 117 / 255, 104 / 255]
+            self.input_std = [1 / (.0167 * 255)] * 3
         else:
             raise ValueError('Unknown base model: {}'.format(base_model))
 

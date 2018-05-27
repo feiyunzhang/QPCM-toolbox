@@ -1,27 +1,28 @@
 # Andrew-toolbox
 
-Invoker Andrew's toolbox, a collection of frequently used scripts.
+Andrew's toolbox, a collection of frequently used scripts.
 
 ## Content
 
 List of available tools 
-1. `mxnet-cubicle/` - MXNet tools
+1. `mxnet/` - MXNet tools
       * `mxnet-cam` - Draw class activation mapping
       * `mxnet-visualizer` - Draw curves according to training log
       * `img-cls` - Image-classification task
       * `obj-det` - Object-detection task
       * `recordio_traverse.py` - Traverse a RecordIO file 
       * `mxnet_setup.sh` - Auto-install mxnet
-2. `caffe-cubicle/` - Caffe tools
+2. `caffe/` - Caffe tools
       * `caffe-visualizer` - Draw curves according to training log
       * `caffe-fm-visualizer` - Visualize internal featuremap
       * `img-cls` - Image-classification task
-3. `pytorch-cubicle/` - Pytorch tools
-4. `labelX-cubicle/` - LabelX tools
+3. `pytorch/` - Pytorch tools
+4. `labelX/` - LabelX tools
       * `gen_labelx_jsonlist.py` - Generate labelX-standard jsonlist
       * `labelx_jsonlist_adapter.py` - Convert labelX-standard jsonlist to useable format
-5. `download_from_urls.py` - Multi-threading downloading scripts  
-6. `classification_evaluator.py` - Evaluate image classification results
+5. `modelzoo/` - Model Zoo
+6. `evaluation` - Evaluate image classification/detection results
+7. `tools/` - Some useful toolkits
 
 ## Requirements
 

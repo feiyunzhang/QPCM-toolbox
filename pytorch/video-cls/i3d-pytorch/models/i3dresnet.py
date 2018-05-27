@@ -1,6 +1,6 @@
 import torch.nn as nn
 
-__all__ = ['I3DResNet', 'resnet50', 'resnet101', 'resnet152']
+__all__ = ['I3DResNet', 'i3d_resnet50', 'i3d_resnet101', 'i3d_resnet152']
 
 class Bottleneck(nn.Module):
     expansion = 4
@@ -55,7 +55,7 @@ class I3DResNet(nn.Module):
         self.layer2 = self._make_layer_inflat(block, 128, layers[1], space_stride=2)
         self.layer3 = self._make_layer_inflat(block, 256, layers[2], space_stride=2)
         self.layer4 = self._make_layer_inflat(block, 512, layers[3], space_stride=2)
-        self.avgpool = nn.AvgPool3d((frame_num/8,7,7))
+        self.avgpool = nn.AvgPool3d((frame_num//8,7,7))
         self.fc = nn.Linear(512 * block.expansion, num_classes)
 
     def _make_layer_inflat(self, block, planes, blocks, space_stride=1):
@@ -100,7 +100,7 @@ class I3DResNet(nn.Module):
         return x
 
 
-def resnet50(pretrained=False, **kwargs):
+def i3d_resnet50(pretrained=False, **kwargs):
     """Constructs a ResNet-50 model.
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
@@ -109,13 +109,13 @@ def resnet50(pretrained=False, **kwargs):
 
     if pretrained:
         import torchvision
-        pretrained_model = torchvision.models.resnet152(pretrained=True)
+        pretrained_model = torchvision.models.resnet50(pretrained=True)
         model = inflat_weights(pretrained_model,model)
 
     return model
 
 
-def resnet101(pretrained=False, **kwargs):
+def i3d_resnet101(pretrained=False, **kwargs):
     """Constructs a ResNet-101 model.
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
@@ -130,7 +130,7 @@ def resnet101(pretrained=False, **kwargs):
     return model
 
 
-def resnet152(pretrained=False, **kwargs):
+def i3d_resnet152(pretrained=False, **kwargs):
     """Constructs a ResNet-152 model.
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
@@ -160,17 +160,6 @@ def inflat_weights(model_2d, model_3d):
                     model_dict_3d[key] = weight_2d
             elif 'bn' in key:
                     model_dict_3d[key] = weight_2d
-            elif 'fc' in key:
-                model_dict_3d[key] = weight_3d
-                """
-                if 'weight' in key:
-                    time_kernel_size = model_dict_3d[key].shape[1] / weight_2d.shape[1]
-                    weight_3d = weight_2d.repeat(1, time_kernel_size)
-                    weight_3d = weight_3d / time_kernel_size
-                    model_dict_3d[key] = weight_3d
-                elif 'bias' in key:
-                    model_dict_3d[key] = weight_2d
-                """
             elif 'downsample' in key:
                 if '0.weight' in key:
                     time_kernel_size = model_dict_3d[key].shape[2]
@@ -179,6 +168,18 @@ def inflat_weights(model_2d, model_3d):
                     model_dict_3d[key] = weight_3d
                 else:
                     model_dict_3d[key] = weight_2d
+            """
+            elif 'fc' in key:
+                model_dict_3d[key] = weight_3d
+
+                if 'weight' in key:
+                    time_kernel_size = model_dict_3d[key].shape[1] / weight_2d.shape[1]
+                    weight_3d = weight_2d.repeat(1, time_kernel_size)
+                    weight_3d = weight_3d / time_kernel_size
+                    model_dict_3d[key] = weight_3d
+                elif 'bias' in key:
+                    model_dict_3d[key] = weight_2d
+            """
 
     model_3d.load_state_dict(model_dict_3d)
     return model_3d
@@ -197,10 +198,10 @@ if __name__ == '__main__':
     tensor = torch.from_numpy(data)
     inputs = Variable(tensor)
     out1 = resnet(inputs)
-    print out1
+    print(out1)
 
     data2 = np.ones((1, 3, 32, 224, 224), dtype=np.float32)
     tensor2 = torch.from_numpy(data2)
     inputs2 = Variable(tensor2)
     out2 = resnet_i3d(inputs2)
-    print out2
+    print(out2)

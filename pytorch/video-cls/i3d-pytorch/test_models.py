@@ -20,12 +20,10 @@ parser.add_argument('test_list', type=str)
 parser.add_argument('weights', type=str)
 parser.add_argument('--arch', type=str, default="resnet101")
 parser.add_argument('--save_scores', type=str, default=None)
-parser.add_argument('--test_clips', type=int, default=10)
-parser.add_argument('--sample_frames_per_clip', type=int, default=32)
+parser.add_argument('--test_clips', type=int, default=4)
+parser.add_argument('--sample_frames', type=int, default=32)
 parser.add_argument('--test_crops', type=int, default=1)
 parser.add_argument('--input_size', type=int, default=224)
-parser.add_argument('--crop_fusion_type', type=str, default='avg',
-                    choices=['avg', 'max', 'topk'])
 parser.add_argument('--k', type=int, default=3)
 parser.add_argument('--dropout', type=float, default=0.5)
 parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
@@ -71,7 +69,7 @@ data_loader = torch.utils.data.DataLoader(
         I3DDataSet("", args.test_list, sample_frames=args.sample_frames,
                     modality=args.modality,
                     image_tmpl="image_{:05d}.jpg" if args.modality in ['RGB', 'RGBDiff'] else args.flow_prefix+"{}_{:05d}.jpg",
-                    train_mode=False,
+                    train_mode=False, test_clips=args.test_clips,
                     transform=torchvision.transforms.Compose([
                        cropping,
                        Stack(),
@@ -97,7 +95,6 @@ output = []
 
 def eval_video(video_data):
     i, data, label = video_data
-    num_clip = args.test_clips
 
     if args.modality == 'RGB':
         num_channel = 3
@@ -105,8 +102,9 @@ def eval_video(video_data):
     else:
         raise ValueError("Unknown modality "+args.modality)
 
-    input_var = torch.autograd.Variable(data.view(-1, num_channel, num_depth, data.size(3), data.size(4)),
-                                        volatile=True)
+    data = data.view(data.size(0),num_channel,-1,num_depth,data.size(3),data.size(4))
+    data = data.squeeze(0).permute(1,0,2,3,4).contiguous()
+    input_var = torch.autograd.Variable(data, volatile=True)
     rst = i3d_model(input_var).data.cpu().numpy().copy()
     return i, rst.reshape((args.test_clips*args.test_crops, num_class)).mean(axis=0).reshape((1, num_class)), \
            label[0]
@@ -154,5 +152,3 @@ if args.save_scores is not None:
         reorder_label[idx] = video_labels[i]
 
     np.savez(args.save_scores, scores=reorder_output, labels=reorder_label)
-
-

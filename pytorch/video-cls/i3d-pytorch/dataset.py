@@ -27,7 +27,7 @@ class I3DDataSet(data.Dataset):
     def __init__(self, root_path, list_file,
                  sample_frames=32, modality='RGB',
                  image_tmpl='img_{:05d}.jpg', transform=None,
-                 force_grayscale=False, train_mode=True):
+                 force_grayscale=False, train_mode=True, test_clips=10):
 
         self.root_path = root_path
         self.list_file = list_file
@@ -37,7 +37,7 @@ class I3DDataSet(data.Dataset):
         self.transform = transform
         self.train_mode = train_mode
         if not self.train_mode:
-            self.num_clips = 10
+            self.num_clips = test_clips
 
         self._parse_list()
 
@@ -68,9 +68,8 @@ class I3DDataSet(data.Dataset):
             start_pos = randint(record.num_frames - expanded_sample_length + 1)
             offsets = range(start_pos, start_pos + expanded_sample_length, 2)
         elif record.num_frames > self.sample_frames:
-            average_duration = record.num_frames // self.sample_frames
-            offsets = np.multiply(list(range(self.sample_frames)), average_duration) + randint(average_duration,
-                                                                                            size=self.sample_frames)
+            start_pos = randint(record.num_frames - self.sample_frames + 1)
+            offsets = range(start_pos, start_pos + self.sample_frames, 1)
         else:
             offsets = np.sort(randint(record.num_frames, size=self.sample_frames))
 
@@ -78,26 +77,22 @@ class I3DDataSet(data.Dataset):
         return offsets
 
     def _get_test_indices(self, record):
+        tick = (record.num_frames - self.sample_frames*2 + 1) / float(self.num_clips)
+        sample_start_pos = np.array([int(tick / 2.0 + tick * x) for x in range(self.num_clips)])
+        offsets = []
+        for p in sample_start_pos:
+            offsets.extend(range(p,p+self.sample_frames*2,2))
 
-        def get_offsets(num_clips, num_frames_per_clip, sample_frames_per_clip):
-            clip_start_pos = np.multiply(list(range(num_clips)), num_frames_per_clip)
-            sample_start_pos = clip_start_pos + num_frames_per_clip // 2 - sample_frames_per_clip // 2  # temporal center of the clip
-            offsets = []
-            for p in sample_start_pos:
-                offsets.extend(range(p, p + sample_frames_per_clip, 2))
-            return offsets
+        checked_offsets = []
+        for f in offsets:
+            new_f = int(f) + 1
+            if new_f < 1:
+                new_f = 1
+            elif new_f >= record.num_frames:
+                new_f = record.num_frames - 1
+            checked_offsets.append(new_f)
 
-        num_frames_per_clip = record.num_frames // self.num_clips
-        if num_frames_per_clip >= self.sample_frames * 2: # in order to drop every other frame
-            sample_frames_per_clip = self.sample_frames * 2
-            offsets = get_offsets(self.num_clips,num_frames_per_clip,sample_frames_per_clip)
-        elif num_frames_per_clip >= self.sample_frames:
-            sample_frames_per_clip = self.sample_frames
-            offsets = get_offsets(self.num_clips, num_frames_per_clip, sample_frames_per_clip)
-        else:
-            offsets = np.sort(randint(record.num_frames, size=self.sample_frames*self.num_clips))
-
-        return offsets
+        return checked_offsets
 
 
     def __getitem__(self, index):
@@ -105,14 +100,18 @@ class I3DDataSet(data.Dataset):
 
         if self.train_mode:
             segment_indices = self._sample_indices(record)
+            process_data, label = self.get(record, segment_indices)
+            while process_data is None:
+                index = randint(0, len(self.video_list) - 1)
+                process_data, label = self.__getitem__(index)
         else:
             segment_indices = self._get_test_indices(record)
+            process_data,label = self.get(record, segment_indices)
+            if process_data is None:
+                raise ValueError('sample indices:', record.path, segment_indices)
 
-        process_data,label = self.get(record, segment_indices)
-        while process_data is None:
-            index = randint(0,len(self.video_list)-1)
-            process_data,label = self.__getitem__(index)
         return process_data,label
+
 
     def get(self, record, indices):
 
