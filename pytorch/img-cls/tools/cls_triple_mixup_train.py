@@ -111,7 +111,7 @@ def mixup_train(loader, model, criterion, optimizer, epoch, use_cuda):
         if use_cuda:
             inputs, targets = inputs.cuda(), targets.cuda()
         # mixup
-        inputs, targets_a, targets_b, tragets_c, lam = mixup_data_triple(inputs, targets, ALPHA, use_cuda)
+        inputs, targets_a, targets_b, targets_c, lam = mixup_data_triple(inputs, targets, ALPHA, use_cuda)
         optimizer.zero_grad()
         inputs, targets_a, targets_b, targets_c = Variable(inputs), Variable(targets_a), Variable(targets_b), Variable(targets_c)
 
