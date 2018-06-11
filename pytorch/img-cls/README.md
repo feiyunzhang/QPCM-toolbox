@@ -5,6 +5,7 @@ Pytorch implementation for Classification, Semantic Segmentation, Pose Estimatio
 - [ ] **Object Detection** (progressing...)
 - [ ] **Pose Estimation** (progressing...)
 
+
 ## Install
 * Install [PyTorch>=0.3.0](http://pytorch.org/)
 * Install [torchvision>=0.2.0](http://pytorch.org/)
@@ -12,6 +13,14 @@ Pytorch implementation for Classification, Semantic Segmentation, Pose Estimatio
   ```
   git clone --recursive https://github.com/soeaver/pytorch-priv
   ```
+wget http://ozuy5nnrv.bkt.clouddn.com/torch-0.3.0.post4-cp27-cp27mu-linux_x86_64.whl or
+wget http://ozuy5nnrv.bkt.clouddn.com/torch-0.3.1-cp27-cp27mu-linux_x86_64.whl or
+wget http://ozuy5nnrv.bkt.clouddn.com/torch-0.3.1-cp36-cp36m-linux_x86_64.whl
+
+* Install [Anaconda-3.6](http://ozuy5nnrv.bkt.clouddn.com/Anaconda3-5.2.0-Linux-x86_64.sh)
+
+* pip install torch-0.3.0.post4-cp27-cp27mu-linux_x86_64.whl
+* pip install torchvision
 * pip install easydict
 
 

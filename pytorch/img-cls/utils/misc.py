@@ -18,7 +18,7 @@ import torch.nn.init as init
 from torch.nn import functional as F
 from torch.autograd import Variable
 
-__all__ = ['get_mean_and_std', 'init_params', 'mkdir_p', 'AverageMeter', 'mixup_data', 'mixup_criterion',
+__all__ = ['get_mean_and_std', 'init_params', 'mkdir_p', 'AverageMeter', 'mixup_data', 'mixup_criterion', 'mixup_data_triple', 'mixup_criterion_triple',
            'weight_filler', 'colorEncode', 'RandomPixelJitter', 'RandomErasing']
 
 
@@ -88,6 +88,27 @@ def mixup_data(x, y, alpha=1.0, use_cuda=True):
 def mixup_criterion(y_a, y_b, lam):
     return lambda criterion, pred: lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)
 
+def mixup_data_triple(x, y, alpha=1.0, use_cuda=True):
+    """Compute the mixup data. Return mixed inputs, pairs of targets, and lambda"""
+    if alpha > 0.:
+        lam = np.random.beta(alpha, alpha)
+    else:
+        lam = 1.
+    batch_size = x.size()[0]
+    if use_cuda:
+        index_a = torch.randperm(batch_size).cuda()
+        index_b = torch.randperm(batch_size).cuda()
+    else:
+        index_a = torch.randperm(batch_size)
+        index_b = torch.randperm(batch_size)
+    mixed_x = lam * x + lam * x[index_a, :] + (1 - 2*lam) * x[index_b, :]
+    y_a, y_b, y_c= y, y[index_a], y[index_b]
+
+    return mixed_x, y_a, y_b, y_c, lam
+
+
+def mixup_criterion_triple(y_a, y_b, y_c, lam):
+    return lambda criterion, pred: lam * criterion(pred, y_a) + lam * criterion(pred, y_b)+ (1 - 2*lam) * criterion(pred, y_c)
 
 def weight_filler(src, dst):
     updated_dict = dst.copy()
