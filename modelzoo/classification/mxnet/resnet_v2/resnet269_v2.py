@@ -115,7 +115,7 @@ def get_symbol(num_classes, num_filter, model_name, **kwargs):
     conv1 = mx.symbol.Convolution(name='conv1', data=data, num_filter=num_filter, pad=(3, 3), kernel=(7, 7),
                                   stride=(2, 2),
                                   no_bias=True)
-    conv1_bn = mx.symbol.BatchNorm(name='conv1_bn', data=conv1, use_global_stats=use_global_stats, fix_gamma=False, eps=0.00001)
+    conv1_bn = mx.symbol.BatchNorm(name='conv1_bn', data=conv1, use_global_stats=True, fix_gamma=False, eps=0.00001)
     conv1_scale = conv1_bn
     conv1_relu = mx.symbol.Activation(name='conv1_relu', data=conv1_scale, act_type='relu')
 
