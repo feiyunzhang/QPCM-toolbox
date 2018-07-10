@@ -1,0 +1,40 @@
+item {
+  name: "none_of_the_above"
+  label: 0
+  display_name: "background"
+}
+item {
+  name: "islamic flag"
+  label: 1
+  display_name: "islamic flag"
+}
+item {
+  name: "isis flag"
+  label: 2
+  display_name: "isis flag"
+}
+item {
+  name: "tibetan flag"
+  label: 3
+  display_name: "tibetan flag"
+}
+item {
+  name: "knives"
+  label: 4
+  display_name: "knives"
+}
+item {
+  name: "guns"
+  label: 5
+  display_name: "guns"
+}
+item {
+  name: "face"
+  label: 6
+  display_name: "face"
+}
+item {
+  name: "not terror"
+  label: 7
+  display_name: "not terror"
+}
