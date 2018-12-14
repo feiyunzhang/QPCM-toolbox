@@ -10,6 +10,7 @@ from .resnext import *
 from .shufflenet import *
 from .shufflenetv2_slim import *
 from .shufflenet_v2 import *
+from .resnet_dropblock import *
 from .vgg import *
 from .se_air import *
 from .se_airx import *
