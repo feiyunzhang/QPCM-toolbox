@@ -13,6 +13,7 @@ import random
 import datetime
 
 import torch
+import torchvision
 import torch.nn as nn
 import torch.nn.parallel
 import torch.backends.cudnn as cudnn
@@ -261,7 +262,8 @@ def main():
     if cfg.CLS.teacher_pretrained:
         if cfg.CLS.torchvision_pretrain:
             #teacher_model = torchvision.models.resnet50(pretrained=True)
-            T_MODEL = cfg.CLS.torchvision_pretrain
+            T_MODEL = eval(cfg.CLS.torchvision_pretrain)
+            print('Teacher pretrained model init done!!!')
         else:
             T_MODEL = models.__dict__[cfg.CLS.teacher_arch]()
             t_checkpoint = torch.load(cfg.CLS.teacher_weights)
@@ -273,22 +275,24 @@ def main():
             t_updated_dict, t_match_layers, t_mismatch_layers = weight_filler(teacher_weight_dict, teacher_model_dict)
             teacher_model_dict.update(t_updated_dict)
             T_MODEL.load_state_dict(teacher_model_dict)
-        T_MODEL = torch.nn.DataParallel(T_MODEL).cuda()
+        #T_MODEL = torch.nn.DataParallel(T_MODEL).cuda()
+        T_MODEL = T_MODEL.cuda().eval()
+        print("==> Creating Teacher Model '{}'".format(T_MODEL))
     # Create model
     if cfg.CLS.teacher_pretrained: 
-        model = models.__dict__[cfg.CLS.arch](T_MODEL)
+        model = models.__dict__[cfg.CLS.arch](teacher_model = T_MODEL)
     else:
         model = models.__dict__[cfg.CLS.arch]() 
     print(model)
     # Calculate FLOPs & Param
-    n_flops, n_convops, n_params = measure_model(model, cfg.CLS.crop_size, cfg.CLS.crop_size)
-    print('==> FLOPs: {:.4f}M, Conv_FLOPs: {:.4f}M, Params: {:.4f}M'.
-          format(n_flops / 1e6, n_convops / 1e6, n_params / 1e6))
-    del model
-    if cfg.CLS.teacher_pretrained: 
-        model = models.__dict__[cfg.CLS.arch](T_MODEL)
-    else:
-        model = models.__dict__[cfg.CLS.arch]() 
+    #n_flops, n_convops, n_params = measure_model(model, cfg.CLS.crop_size, cfg.CLS.crop_size)
+    #print('==> FLOPs: {:.4f}M, Conv_FLOPs: {:.4f}M, Params: {:.4f}M'.
+    #      format(n_flops / 1e6, n_convops / 1e6, n_params / 1e6))
+    #del model
+    #if cfg.CLS.teacher_pretrained: 
+    #    model = models.__dict__[cfg.CLS.arch](teacher_model = T_MODEL)
+    #else:
+    #    model = models.__dict__[cfg.CLS.arch]() 
 
     # Load pre-train model
     if cfg.CLS.pretrained:

@@ -30,31 +30,29 @@ class DropBlock2D(nn.Module):
         self.drop_prob = drop_prob
         self.block_size = block_size
 
-    def forward(self, x, y):
+    def forward(self, x):
         # shape: (bsize, channels, height, width)
-
-        assert x.dim() == 4, \
-            "Expected input with 4 dimensions (bsize, channels, height, width)"
-
-        assert x.shape == y.shape, "Not equal"
-
         if not self.training or self.drop_prob == 0.:
+            assert x.dim() == 4, \
+            "Expected input with 4 dimensions (bsize, channels, height, width)"
             return x
         else:
+            y = x[1]
+            assert x[0].shape == y.shape, "Not equal"
             # get gamma value
-            gamma = self._compute_gamma(x)
+            gamma = self._compute_gamma(x[0])
 
             # sample mask
-            mask = (torch.rand(x.shape[0], *x.shape[2:]) < gamma).float()
+            mask = (torch.rand(x[0].shape[0], *x[0].shape[2:]) < gamma).float()
 
             # place mask on input device
-            mask = mask.to(x.device)
+            mask = mask.to(x[0].device)
 
             # compute block mask
             block_student_mask, block_teacher_mask = self._compute_block_mask(mask)
 
             # apply block mask
-            student_out = x * block_student_mask[:, None, :, :]
+            student_out = x[0] * block_student_mask[:, None, :, :]
             teacher_out = y * block_teacher_mask[:, None, :, :]
             
             out = student_out + teacher_out

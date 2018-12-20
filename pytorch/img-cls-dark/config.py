@@ -58,7 +58,10 @@ __C.CLS.cosine_lr = False  # using cosine learning rate
 __C.CLS.validate = True  # validate
 __C.CLS.evaluate = False  # evaluate
 #__C.CLS.teacher_model = False # darkknowledge teacher model
-__C.CLS.teacher_pretrained = '' #path to teacher pretrained model
+__C.CLS.teacher_pretrained = False # teacher learning
+__C.CLS.torchvision_pretrain = '' # torchvision.models.resnet50(pretrained=True)
+__C.CLS.teacher_arch = '' #teacher model arch 
+__C.CLS.teacher_weights = '' #path to teacher pretrained model
 
 
 def _merge_a_into_b(a, b):
@@ -68,9 +71,9 @@ def _merge_a_into_b(a, b):
     if type(a) is not edict:
         return
 
-    for k, v in a.iteritems():
+    for k, v in a.items():
         # a must specify keys that are in b
-        if not b.has_key(k):
+        if not k in b:
             raise KeyError('{} is not a valid config key'.format(k))
 
         # the types must match, too
