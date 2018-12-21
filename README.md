@@ -1,6 +1,6 @@
-# Andrew-toolbox
+# QPCM-toolbox
 
-Andrew's toolbox, a collection of frequently used scripts.
+QPCM toolbox, a collection of frequently used scripts.
 
 ## Content
 
