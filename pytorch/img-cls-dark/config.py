@@ -62,6 +62,9 @@ __C.CLS.teacher_pretrained = False # teacher learning
 __C.CLS.torchvision_pretrain = '' # torchvision.models.resnet50(pretrained=True)
 __C.CLS.teacher_arch = '' #teacher model arch 
 __C.CLS.teacher_weights = '' #path to teacher pretrained model
+__C.CLS.kd_loss = False
+__C.CLS.alpha = 0.05
+__C.CLS.temperature = 6
 
 
 def _merge_a_into_b(a, b):
@@ -127,3 +130,4 @@ def cfg_from_list(cfg_list):
             'type {} does not match original type {}'.format(
                 type(value), type(d[subkey]))
         d[subkey] = value
+

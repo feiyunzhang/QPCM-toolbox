@@ -153,7 +153,7 @@ class BasicBlockDrop(nn.Module):
 class BottleneckDrop(nn.Module):
     expansion = 4
 
-    def __init__(self, inplanes, planes, dropblock, teacher_model, stage, stride=1, downsample=None, index=0):
+    def __init__(self, inplanes, planes, dropblock, teacher_model, stage, index, blocks, stride=1, downsample=None):
         super(BottleneckDrop, self).__init__()
         self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, stride=1, bias=False)
         self.bn1 = nn.BatchNorm2d(planes)
@@ -167,32 +167,58 @@ class BottleneckDrop(nn.Module):
         self.teacher_model = teacher_model
         self.stage = stage
         self.index = index 
+        self.blocks = blocks
 
-    def forward(self, x, y=None):
-        residual = x
-        feature_map_index = 'teacher_model.layer' + str(stage) + '[' + str(index) + '].conv2(y)'
-        teacher_feature_map = eval(feature_map_index) 
+    def forward(self, x):
+        if self.training:
+            residual = x[0]
+            t_conv1 = eval('self.teacher_model.layer' + str(self.stage) + '[' + str(self.index) + '].conv1(x[1])')
+            t_bn1 = eval('self.teacher_model.layer' + str(self.stage) + '[' + str(self.index) + '].bn1(t_conv1)')
+            t_relu1 = eval('self.teacher_model.layer' + str(self.stage) + '[' + str(self.index) + '].relu(t_bn1)')
+
+            t_conv2 = eval('self.teacher_model.layer' + str(self.stage) + '[' + str(self.index) + '].conv2(t_relu1)')
+            t_bn2 = eval('self.teacher_model.layer' + str(self.stage) + '[' + str(self.index) + '].bn2(t_conv2')
+            t_relu2 = eval('self.teacher_model.layer' + str(self.stage) + '[' + str(self.index) + '].relu2(t_bn2)')
+            t_conv3 = eval('self.teacher_model.layer' + str(self.stage) + '[' + str(self.index) + '].conv3(t_relu2)')
+
+            out = self.dropblock(self.conv1(x[0]), t_conv1)
+            out = self.bn1(out)
+            out = self.relu(out)
+
+            out = self.dropblock(self.conv2(out), t_conv2)
+            out = self.bn2(out)
+            out = self.relu(out)
+
+            out = self.dropblock(self.conv3(out), t_conv3)
+            out = self.bn3(out)
+
+            if self.downsample is not None:
+                residual = self.downsample(x)
         
-        out = self.conv1(x)
-        out = self.bn1(out)
-        out = self.relu(out)
+            residual = self.dropblock((residual,x[1]))
+            t_out = eval('self.teacher_model.layer' + str(self.stage) + '[' + str(self.index) + '](x[1])')
+        else:
+            residual = x
+            out = self.conv1(x)
+            out = self.bn1(out)
+            out = self.relu(out)
 
-        out = self.dropblock(self.conv2(out), teacher_feature_map)
-        out = self.bn2(out)
-        out = self.relu(out)
+            out = self.conv2(out)
+            out = self.bn2(out)
+            out = self.relu(out)
 
-        out = self.conv3(out)
-        out = self.bn3(out)
+            out = self.conv3(out)
+            out = self.bn3(out)
 
-        if self.downsample is not None:
-            residual = self.downsample(x)
-        #TODO xtz
-        residual = self.dropblock(residual, residual_teacher_feature_map)
-
+            if self.downsample is not None:
+                residual = self.downsample(x) 
         out += residual
         out = self.relu(out)
 
-        return out
+        if self.training and self.index != (self.blocks -1):
+            return (out, t_out)
+        else:
+            return out
 
 
 class ResDropNet(nn.Module):
@@ -214,7 +240,9 @@ class ResDropNet(nn.Module):
 
         self.dropblock = DropBlock2D(drop_prob=drop_prob, block_size=block_size)
         self.teacher_model = teacher_model
-
+        for p in self.teacher_model.parameters():
+            p.requires_grad = False
+        
         self.head7x7 = head7x7
         if self.head7x7:
             self.conv1 = nn.Conv2d(3, baseWidth, 7, 2, 3, bias=False)
@@ -289,10 +317,20 @@ class ResDropNet(nn.Module):
             y = self.teacher_model.conv1(y)
             y = self.teacher_model.bn1(y)
             y = self.teacher_model.relu(y)
+            y = self.teacher_model.conv2(y)
+            y = self.teacher_model.bn2(y)
+            y = self.teacher_model.relu(y)
+            y = self.teacher_model.conv3(y)
+            y = self.teacher_model.bn3(y)
+            y = self.teacher_model.relu(y)
             y = self.teacher_model.maxpool(y)
             y = self.teacher_model.layer1(y)
             y1 = self.teacher_model.layer2(y)
             y2 = self.teacher_model.layer3(y1)
+            y3 = self.teacher_model.layer4(y2)
+            y3 = self.teacher_model.avgpool(y3)
+            y3 = y3.view(y3.size(0), -1)
+            y3 = self.teacher_model.fc(y3)
         x = self.maxpool(x)
         x = self.layer1(x)
         x = self.layer2(x)
@@ -305,8 +343,10 @@ class ResDropNet(nn.Module):
         x = self.avgpool(x)
         x = x.view(x.size(0), -1)
         x = self.fc(x)
-
-        return x
+        if self.training:
+            return (x,y3)
+        else:
+            return x
 
 
 def resnet(bottleneck=True, baseWidth=64, head7x7=True, layers=(3, 4, 23, 3), num_classes=1000, drop_prob=0.1, block_size=7, teacher_model=None):
@@ -324,7 +364,7 @@ def resnet(bottleneck=True, baseWidth=64, head7x7=True, layers=(3, 4, 23, 3), nu
     return model
 
 
-def resnet18_dropblock(drop_prob=0.1, block_size=7, teacher_model = None):
+def resnet18_dropblock(drop_prob=0.2, block_size=7, teacher_model = None):
     model = ResDropNet(bottleneck=False, baseWidth=64, head7x7=False, layers=(2, 2, 2, 2), num_classes=1000, drop_prob=drop_prob, block_size=block_size, teacher_model = teacher_model)
     return model
 

@@ -1,0 +1,40 @@
+workers: 32
+pixel_mean: [0.485, 0.456, 0.406]
+pixel_std: [0.229, 0.224, 0.225]
+gpu_ids: '0,1,2,3'
+
+CLS:
+  arch: 'resnet18_dropblock'
+  data_root: '/workspace/data1/pytorch/imagenet/DB/dark-res18-d3-kd/data/ImageNet-pytorch'
+  train_folder: 'train'
+  val_folder: 'val'
+  epochs: 150
+  train_batch: 256
+  test_batch: 256
+  base_lr: 0.1
+  lr_schedule: [40, 80, 120]
+  gamma: 0.1
+  momentum: 0.9
+  weight_decay: 0.0001
+  fix_bn: False
+  num_classes: 1000
+  base_size: 256
+  crop_size: 224
+  rotation: [-10, 10]
+  pixel_jitter: [-20, 20]
+  grayscale: 0
+  disp_iter: 20
+  ckpt: 'ckpts/imagenet/resnet18_d3-kd'
+  resume: ''
+  start_epoch: 0
+  pretrained: ''
+  validate: True
+  evaluate: False
+  teacher_pretrained: True
+  #torchvision_pretrain: 'torchvision.models.resnet50(pretrained=True)'
+  teacher_arch: 'resnet50_1x64d'
+  teacher_weights: '/workspace/data1/pytorch/imagenet/DB/dark-res18-d3-kd/ckpts/teacher_model/resnet50_1x64d.pth.tar'
+  kd_loss: True
+  alpha: 0.5
+  temperature: 6
+

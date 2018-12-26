@@ -19,7 +19,7 @@ from torch.nn import functional as F
 from torch.autograd import Variable
 
 __all__ = ['get_mean_and_std', 'init_params', 'mkdir_p', 'AverageMeter', 'mixup_data', 'mixup_criterion', 'mixup_data_triple', 'mixup_criterion_triple',
-           'weight_filler', 'colorEncode', 'RandomPixelJitter', 'RandomErasing']
+           'weight_filler', 'colorEncode', 'RandomPixelJitter', 'RandomErasing', 'loss_fn_kd']
 
 
 class RandomPixelJitter(object):
@@ -136,6 +136,15 @@ def weight_filler(src, dst):
                 updated_dict[dst_k] = src[src_k]
             else:
                 mismatch_layers.append(dst_k)
+        elif 'teacher_model' in dst_k:
+            dd = dst_k.split('teacher_model.')[1]
+            if 'module.' + dd in src:
+                src_k = 'module.' + dd 
+                if src[src_k].shape == dst[dst_k].shape:
+                    match_layers.append(dst_k)
+                    updated_dict[dst_k] = src[src_k]
+                else:
+                    mismatch_layers.append(dst_k)
         else:
             mismatch_layers.append(dst_k)
 
@@ -157,6 +166,20 @@ def get_mean_and_std(dataset):
     std.div_(len(dataset))
     return mean, std
 
+def loss_fn_kd(outputs, labels, teacher_outputs, alpha, temperature):
+    """
+    Compute the knowledge-distillation (KD) loss given outputs, labels.
+    "Hyperparameters": temperature and alpha
+
+    NOTE: the KL Divergence for PyTorch comparing the softmaxs of teacher
+    and student expects the input tensor to be log probabilities! See Issue #2
+    """
+    alpha = alpha
+    T = temperature
+    KD_loss = nn.KLDivLoss()(F.log_softmax(outputs/T, dim=1),
+                             F.softmax(teacher_outputs/T, dim=1)) * (alpha * T * T * 50) + \
+              F.cross_entropy(outputs, labels) * (1. - alpha)
+    return KD_loss
 
 def init_params(net):
     """Init layer parameters."""
