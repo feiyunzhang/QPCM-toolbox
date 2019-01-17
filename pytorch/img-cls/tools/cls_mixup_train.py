@@ -40,7 +40,7 @@ import numpy as np
 from tools import draw_curve
 from config import cfg, cfg_from_file, cfg_from_list
 from utils import Logger, AverageMeter, measure_model, accuracy, mkdir_p, savefig, mixup_data, mixup_criterion, \
-    weight_filler, RandomPixelJitter
+    weight_filler, RandomPixelJitter,accuracy_mixup
 
 # Models
 default_model_names = sorted(name for name in models.__dict__
@@ -131,10 +131,13 @@ def mixup_train(loader, model, criterion, optimizer, epoch, use_cuda):
         batch_time.update(time.time() - end)
         end = time.time()
         # measure accuracy and record loss
-        prec1, prec5 = [0.0], [0.0]
-        losses.update(loss.data[0], inputs.size(0))
-        top1.update(prec1[0], inputs.size(0))
-        top5.update(prec5[0], inputs.size(0))
+        # prec1, prec5 = [0.0], [0.0]
+
+        prec1, prec5 = accuracy_mixup(outputs.data, targets_a.data, targets_b.data, ALPHA,topk=(1, 5))
+        
+        losses.update(loss.item(), inputs.size(0))
+        top1.update(prec1.item(), inputs.size(0))
+        top5.update(prec5.item(), inputs.size(0))
 
         if (batch_idx + 1) % cfg.CLS.disp_iter == 0:
             print('Training: [{}/{}][{}/{}] | Best_Acc: {:4.2f}% | Time: {:.2f} | Data: {:.2f} | '
@@ -177,9 +180,9 @@ def test(val_loader, model, criterion, epoch, use_cuda):
         end = time.time()
         # measure accuracy and record loss
         prec1, prec5 = accuracy(outputs.data, targets.data, topk=(1, 5))
-        losses.update(loss.data[0], inputs.size(0))
-        top1.update(prec1[0], inputs.size(0))
-        top5.update(prec5[0], inputs.size(0))
+        losses.update(loss.data.item(), inputs.size(0))
+        top1.update(prec1.item(), inputs.size(0))
+        top5.update(prec5.item(), inputs.size(0))
 
         print('Testing: [{}/{}][{}/{}] | Best_Acc: {:4.2f}% | Time: {:.2f} | Data: {:.2f} | '
               'LR: {:.8f} | Top1: {:.4f}% | Top5: {:.4f}% | Loss: {:.4f} | Total: {:.2f}'

@@ -243,6 +243,21 @@ def conv_bn(name, in_channels, out_channels, kernel_size, stride=1, padding=0, d
     )
 
 
+def conv_in_relu(name, in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1, groups=1):
+    return nn.Sequential(
+        g_name(name, nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding, dilation, groups, False)),
+        g_name(name + '/bn', nn.InstanceNorm2d(out_channels)),
+        g_name(name + '/relu', nn.ReLU(inplace=True)),
+    )
+
+
+def conv_in(name, in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1, groups=1):
+    return nn.Sequential(
+        g_name(name, nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding, dilation, groups, False)),
+        g_name(name + '/bn', nn.InstanceNorm2d(out_channels)),
+    )
+
+
 def conv(name, in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1, groups=1):
     return g_name(name, nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding, dilation, groups, True))
 

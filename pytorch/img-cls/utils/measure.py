@@ -75,7 +75,7 @@ def measure_layer(layer, x):
         delta_params = get_layer_param(layer)
 
     ### ops_nothing
-    elif type_name in ['BatchNorm2d', 'Dropout2d', 'DropChannel', 'Dropout', 'Sequential', 'ChannelShuffle']:
+    elif type_name in ['InstanceNorm2d','BatchNorm2d', 'Dropout2d', 'DropChannel', 'Dropout', 'Sequential', 'ChannelShuffle']:
         delta_params = get_layer_param(layer)
 
     ### unknown layer type

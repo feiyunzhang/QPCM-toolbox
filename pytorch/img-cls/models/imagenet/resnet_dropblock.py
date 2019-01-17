@@ -275,7 +275,7 @@ class ResDropNet(nn.Module):
         return x
 
 
-def resnet(bottleneck=True, baseWidth=64, head7x7=True, layers=(3, 4, 23, 3), num_classes=1000，drop_prob=0.1, block_size=7, nr_steps=5e4):
+def resnet(bottleneck=True, baseWidth=64, head7x7=True, layers=(3, 4, 23, 3), num_classes=1000, drop_prob=0.1, block_size=7, nr_steps=5e4):
     """
     Construct ResNet.
     (2, 2, 2, 2) for resnet18	# bottleneck=False

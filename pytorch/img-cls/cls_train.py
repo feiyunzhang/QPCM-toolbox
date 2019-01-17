@@ -119,9 +119,9 @@ def train(loader, model, criterion, optimizer, epoch, use_cuda):
         end = time.time()
         # measure accuracy and record loss
         prec1, prec5 = accuracy(outputs.data, targets.data, topk=(1, 5))
-        losses.update(loss.data[0], inputs.size(0))
-        top1.update(prec1[0], inputs.size(0))
-        top5.update(prec5[0], inputs.size(0))
+        losses.update(loss.item(), inputs.size(0))
+        top1.update(prec1.item(), inputs.size(0))
+        top5.update(prec5.item(), inputs.size(0))
 
         if (batch_idx + 1) % cfg.CLS.disp_iter == 0:
             print('Training: [{}/{}][{}/{}] | Best_Acc: {:4.2f}% | Time: {:.2f} | Data: {:.2f} | '
@@ -163,9 +163,9 @@ def test(val_loader, model, criterion, epoch, use_cuda):
         end = time.time()
         # measure accuracy and record loss
         prec1, prec5 = accuracy(outputs.data, targets.data, topk=(1, 5))
-        losses.update(loss.data[0], inputs.size(0))
-        top1.update(prec1[0], inputs.size(0))
-        top5.update(prec5[0], inputs.size(0))
+        losses.update(loss.item(), inputs.size(0))
+        top1.update(prec1.item(), inputs.size(0))
+        top5.update(prec5.item(), inputs.size(0))
 
         print('Testing: [{}/{}][{}/{}] | Best_Acc: {:4.2f}% | Time: {:.2f} | Data: {:.2f} | '
               'LR: {:.8f} | Top1: {:.4f}% | Top5: {:.4f}% | Loss: {:.4f} | Total: {:.2f}'

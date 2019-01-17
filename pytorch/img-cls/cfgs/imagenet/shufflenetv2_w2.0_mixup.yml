@@ -5,12 +5,12 @@ gpu_ids: '0,1,2,3,4,5,6,7'
 
 CLS:
   arch: 'shufflenet_v2'
-  data_root: '/workspace/data/pytorch/shufflenetv2_w2.0_mixup/data/ImageNet-pytorch'
+  data_root: 'ImageNet-1k'
   train_folder: 'train'
   val_folder: 'val'
   epochs: 210
-  train_batch: 1024
-  test_batch: 400
+  train_batch: 128
+  test_batch: 100
   base_lr: 0.1
   lr_schedule: [60, 120, 180]
   gamma: 0.1

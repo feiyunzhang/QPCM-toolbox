@@ -2,7 +2,7 @@ from __future__ import print_function, absolute_import
 
 import torch
 
-__all__ = ['accuracy', 'seg_accuracy', 'intersectionAndUnion']
+__all__ = ['accuracy', 'accuracy_mixup','seg_accuracy', 'intersectionAndUnion']
 
 
 def accuracy(output, target, topk=(1,)):
@@ -17,6 +17,22 @@ def accuracy(output, target, topk=(1,)):
     res = []
     for k in topk:
         correct_k = correct[:k].view(-1).float().sum(0)
+        res.append(correct_k.mul_(100.0 / batch_size))
+    return res
+
+def accuracy_mixup(output, targeta,targetb,lam, topk=(1,)):
+    """Computes the precision@k for the specified values of k"""
+    maxk = max(topk)
+    batch_size = targeta.size(0)
+
+    _, pred = output.topk(maxk, 1, True, True)
+    pred = pred.t()
+    correct_a = pred.eq(targeta.view(1, -1).expand_as(pred)) 
+    correct_b = pred.eq(targetb.view(1, -1).expand_as(pred)) 
+
+    res = []
+    for k in topk:
+        correct_k = correct_a[:k].view(-1).float().sum(0) * lam + (1-lam) * correct_b[:k].view(-1).float().sum(0) 
         res.append(correct_k.mul_(100.0 / batch_size))
     return res
 
